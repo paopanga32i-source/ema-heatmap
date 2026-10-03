@@ -7,6 +7,8 @@ EMA20 ATR Heatmap
     streamlit run ema_atr_heatmap.py
 """
 
+from datetime import timedelta
+
 import pandas as pd
 import streamlit as st
 import yfinance as yf
@@ -24,13 +26,13 @@ DEFAULT_US = "AAPL MSFT NVDA AMZN GOOGL META TSLA AVGO AMD NFLX COST JPM LLY PLT
 
 # ระดับสีตามระยะห่าง (เท่าของ ATR)
 LEVELS = [
-    (float("-inf"), 0, "#5B7DB1", "#FFFFFF", "ต่ำกว่า EMA20"),
-    (0, 1, "#E9ECEF", "#333333", "0 – 1"),
-    (1, 1.5, "#B7E4C7", "#1B4332", "1 – 1.5"),
-    (1.5, 2, "#52B788", "#FFFFFF", "1.5 – 2"),
-    (2, 2.5, "#FFD166", "#5C3D00", "2 – 2.5"),
-    (2.5, 3, "#F4A261", "#4A1F00", "2.5 – 3"),
-    (3, float("inf"), "#D62828", "#FFFFFF", "มากกว่า 3"),
+    (float("-inf"), 0, "#3F3F3F", "#FFFFFF", "ต่ำกว่า EMA20 (ห้ามเล่น)"),
+    (0, 1, "#E3F4E6", "#1E4D2B", "0 – 1"),
+    (1, 1.5, "#B9E4C2", "#1E4D2B", "1 – 1.5"),
+    (1.5, 2, "#86CF98", "#123D20", "1.5 – 2"),
+    (2, 2.5, "#4FAE6A", "#FFFFFF", "2 – 2.5"),
+    (2.5, 3, "#2B8A47", "#FFFFFF", "2.5 – 3"),
+    (3, float("inf"), "#145A2C", "#FFFFFF", "มากกว่า 3"),
 ]
 
 
@@ -126,10 +128,11 @@ if prices:
             f"ข้อมูลล่าสุดเก่ากว่าวันนี้ {lag_days} วัน แหล่งข้อมูล (Yahoo Finance) อาจไม่อัปเดตหุ้นชุดนี้ "
             "ลองกด 'ดึงข้อมูลใหม่' หรือเช็กหน้า History ของหุ้นใน Yahoo Finance"
         )
-    stale = last_dates[last_dates < newest]
+    stale = last_dates[last_dates < newest - timedelta(days=3)]
     if len(stale):
-        st.warning("หุ้นที่ข้อมูลเก่ากว่าตัวอื่น: " + ", ".join(
-            f"{t.replace(suffix, '')} ({d.strftime('%d/%m')})" for t, d in stale.items()))
+        st.warning("ตัดออกเพราะข้อมูลไม่อัปเดต (Yahoo หยุดส่งข้อมูลหุ้นตัวนี้): " + ", ".join(
+            f"{t.replace(suffix, '')} (ถึง {d.strftime('%d/%m')})" for t, d in stale.items()))
+        prices = {t: df for t, df in prices.items() if t not in stale.index}
 
 rows, hist = [], {}
 for t, df in prices.items():
@@ -174,13 +177,18 @@ if table.empty:
 
 # ---------------- Heatmap ----------------
 order = table["หุ้น"].tolist()
-dates = hist[order[0]].index
+# ใช้วันที่ร่วมของทุกตัว ไม่ยึดตามหุ้นแถวแรก
+all_dates = sorted(set().union(*[set(hist[n].index) for n in order]))
+dates = all_dates[-days:]
 head = "".join(f"<th>{pd.Timestamp(x).strftime('%d/%m')}</th>" for x in dates)
 body = ""
 for name in order:
-    h = hist[name]
+    h = hist[name].reindex(dates)
     cells = ""
     for _, r in h.iterrows():
+        if pd.isna(r["DIST"]):
+            cells += '<td style="color:#AAA">–</td>'
+            continue
         bg, fg = level_of(r["DIST"])
         mark = "" if r["OPEN_ABOVE_SLOW"] else "opacity:0.35;"
         cells += f'<td style="background:{bg};color:{fg};{mark}">{r["DIST"]:.1f}</td>'
