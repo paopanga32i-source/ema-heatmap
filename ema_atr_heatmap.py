@@ -45,10 +45,12 @@ def level_of(v):
 
 # ---------------- ดึงข้อมูล ----------------
 @st.cache_data(ttl=900, show_spinner=False)
-def load_prices(tickers: tuple):
+def load_prices(tickers: tuple, today: str):
+    end = pd.Timestamp(today) + pd.Timedelta(days=1)
+    start = end - pd.Timedelta(days=400)
     data = yf.download(
-        list(tickers), period="1y", interval="1d",
-        group_by="ticker", auto_adjust=True, threads=True, progress=False,
+        list(tickers), start=start.strftime("%Y-%m-%d"), end=end.strftime("%Y-%m-%d"),
+        interval="1d", group_by="ticker", auto_adjust=True, threads=False, progress=False,
     )
     out = {}
     for t in tickers:
@@ -106,11 +108,28 @@ if not tickers:
     st.stop()
 
 with st.spinner(f"กำลังดึงราคา {len(tickers)} ตัว..."):
-    prices = load_prices(tickers)
+    today_bkk = pd.Timestamp.now(tz="Asia/Bangkok").strftime("%Y-%m-%d")
+    prices = load_prices(tickers, today_bkk)
 
 missing = [t for t in tickers if t not in prices]
 if missing:
     st.warning("ดึงข้อมูลไม่ได้: " + ", ".join(m.replace(suffix, "") for m in missing))
+
+# ---------------- เช็กว่าข้อมูลสดไหม ----------------
+if prices:
+    last_dates = pd.Series({t: pd.Timestamp(df.index[-1]).date() for t, df in prices.items()})
+    newest = last_dates.max()
+    lag_days = (pd.Timestamp.now(tz="Asia/Bangkok").date() - newest).days
+    st.caption(f"ข้อมูลล่าสุดถึงวันที่ {newest.strftime('%d/%m/%Y')}")
+    if lag_days > 4:
+        st.error(
+            f"ข้อมูลล่าสุดเก่ากว่าวันนี้ {lag_days} วัน แหล่งข้อมูล (Yahoo Finance) อาจไม่อัปเดตหุ้นชุดนี้ "
+            "ลองกด 'ดึงข้อมูลใหม่' หรือเช็กหน้า History ของหุ้นใน Yahoo Finance"
+        )
+    stale = last_dates[last_dates < newest]
+    if len(stale):
+        st.warning("หุ้นที่ข้อมูลเก่ากว่าตัวอื่น: " + ", ".join(
+            f"{t.replace(suffix, '')} ({d.strftime('%d/%m')})" for t, d in stale.items()))
 
 rows, hist = [], {}
 for t, df in prices.items():
