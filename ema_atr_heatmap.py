@@ -183,7 +183,11 @@ st.markdown(
 .hm-wrap{overflow-x:auto}
 .hm{border-collapse:separate;border-spacing:2px;font-size:13px;font-variant-numeric:tabular-nums}
 .hm th{font-weight:500;color:#666;padding:4px 6px;white-space:nowrap}
-.hm th.sym{text-align:left;color:inherit;font-weight:600;position:sticky;left:0;background:var(--background-color,#fff)}
+.hm th.sym{text-align:left;font-weight:600;position:sticky;left:0;z-index:1;
+  background:#FFFFFF;color:#111111}
+@media (prefers-color-scheme: dark){
+  .hm th.sym{background:#0E1117;color:#FAFAFA}
+}
 .hm td{min-width:44px;text-align:center;padding:6px 4px;border-radius:3px}
 </style>
 """,
